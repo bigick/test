@@ -1,0 +1,58 @@
+from docx import Document
+from docx.oxml import OxmlElement
+from copy import deepcopy
+
+def get_all_tables(doc):
+    return [el for el in doc.element.body if el.tag.endswith('tbl')]
+
+def find_table_by_title(doc, title_keyword):
+    """
+    找到段落中包含表格标题的文本，然后返回后续第一个表格的位置及表格对象
+    """
+    body = doc.element.body
+    found = False
+    for i, el in enumerate(body):
+        if el.tag.endswith('p'):
+            text = ''.join(node.text or '' for node in el.iter() if node.tag.endswith('t'))
+            if title_keyword in text:
+                found = True
+        elif found and el.tag.endswith('tbl'):
+            return i, el
+    return None, None
+
+def replace_tables_by_title(source_docx, target_docx, title_to_source_index_map, output_path):
+    source_doc = Document(source_docx)
+    target_doc = Document(target_docx)
+
+    source_tables = get_all_tables(source_doc)
+    target_body = target_doc.element.body
+
+    for title_text, source_index in title_to_source_index_map.items():
+        if source_index >= len(source_tables):
+            print(f"❌ 源文档中没有第 {source_index+1} 个表格，跳过“{title_text}”")
+            continue
+
+        target_index, target_tbl = find_table_by_title(target_doc, title_text)
+        if target_tbl is None:
+            print(f"❌ 未找到目标文档中标题包含“{title_text}”的表格，跳过")
+            continue
+
+        # 替换表格
+        new_table = deepcopy(source_tables[source_index])
+        target_body.insert(target_body.index(target_tbl), new_table)
+        target_body.remove(target_tbl)
+        print(f"✅ 替换完成：标题“{title_text}”对应表格")
+
+    target_doc.save(output_path)
+    print(f"\n📄 所有表格替换完成，保存至：{output_path}")
+
+# ✅ 示例调用
+replace_tables_by_title(
+    source_docx='source.docx',
+    target_docx='target.docx',
+    title_to_source_index_map={
+        "物理机房": 0,
+        "物理机房": 0
+    },
+    output_path='output.docx'
+)
